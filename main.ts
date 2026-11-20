@@ -18,8 +18,22 @@ import { join } from 'node:path';
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-/** A YouTube address: a Shorts, watch, or youtu.be link. */
-const YOUTUBE_URL = /^https:\/\/(www\.youtube\.com\/(shorts\/|watch\?v=)|youtu\.be\/)[A-Za-z0-9_-]{6,}/;
+/** A YouTube address: a Shorts, watch, or youtu.be link. Captures the video ID. */
+const YOUTUBE_URL =
+  /^https:\/\/(?:www\.youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]+)/;
+
+/**
+ * The video ID in a YouTube address, or null when there is none.
+ * A real YouTube video ID is exactly 11 characters; accepting any length
+ * would let a typo'd or truncated ID (or a pasted playlist/channel address)
+ * slip through and fail only at the gate.
+ */
+function videoId(url: string): string | null {
+  const match = YOUTUBE_URL.exec(url);
+  if (match === null) return null;
+  const id = match[1];
+  return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
 
 function fail(message: string): never {
   console.error(`gta6-clipper: ${message}`);
@@ -46,8 +60,10 @@ function main(): void {
   if (typeof record !== 'object' || record === null || typeof record.url !== 'string') {
     fail(`${source} must hold {"url": "<youtube address>"}`);
   }
-  if (!YOUTUBE_URL.test(record.url)) {
-    fail(`${source} does not name a YouTube video: ${record.url}`);
+  if (videoId(record.url) === null) {
+    fail(
+      `${source} does not name a YouTube video with an 11-character video ID: ${record.url}`,
+    );
   }
 
   mkdirSync(OUTPUT_DIR, { recursive: true });
